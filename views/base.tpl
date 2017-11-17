@@ -2,7 +2,7 @@
 from persistance import User
 user = User()
 %>
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
     <meta charset="utf-8"/>

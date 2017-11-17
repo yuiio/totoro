@@ -3,7 +3,6 @@ from random import randint
 from bottle import route, static_file, run, debug, template, redirect, request, response, get, post
 from markdown import markdown
 from persistance import User
-from functools import wraps
 
 user = User() # for data persistance
 
@@ -14,6 +13,20 @@ def is_logged():
 @route('/static/<filename>')
 def server_static(filename):
     return static_file(filename, root='./static/')
+
+@route('/download/<filename>')
+def download(filename):
+    return static_file(filename, root='./static/', download=filename)
+
+@route('/txt/<filename>')
+def just_txt(filename):
+    path = './static/{}'.format(filename)
+    if os.path.exists(path):
+        with open(path, 'r') as txt_data:
+            txt = txt_data.read()
+    else:
+        txt = path
+    return template('raw', body=txt)
 
 @route('/')
 def index():
@@ -29,7 +42,7 @@ def index():
             'href="/challenge/final" class="calendar-complete"',
             'href="/page/congratulations" class="calendar-complete"'
             ]
-        
+
         for i in range(user.level+1, len(attr)):
             attr[i] = 'href="#"'
         attr[user.level] = attr[user.level].split(' ')[0]
@@ -83,7 +96,7 @@ def reset():
     redirect('/login')
 
 @route('/page/<page_name>')
-def page(page_name = 'index'):
+def page(page_name):
     is_logged()
     metas, content = page_parser(page_name)
     title = metas['title']
@@ -93,20 +106,20 @@ def page(page_name = 'index'):
 @get('/challenge/<page_name>')
 def question(page_name):
     is_logged()
-    
+
     answer = None
     if page_name in user.reps:
         answer = user.reps[page_name]
-        
+
     metas, content = page_parser(page_name)
     title = metas['title']
     next_level = metas['next_level']
     solution = metas['reponse']
     html = markdown(content)
     return template(
-        'question', 
-        page_name=page_name, 
-        title=title, 
+        'question',
+        page_name=page_name,
+        title=title,
         body=html,
         solution=solution,
         answer=answer,
@@ -118,24 +131,24 @@ def check_answer(page_name):
     is_logged()
 
     answer = request.forms.get('reponse')
-    
+
     metas, content = page_parser(page_name)
     title = metas['title']
     solution = metas['reponse']
     next_level = metas['next_level']
     html = markdown(content)
-    
+
     user.reps[page_name] = answer
     if answer == solution:
         user.level += 1
         if user.level == 7:
-            user.map_unlocked = True 
+            user.map_unlocked = True
     user.save()
 
     return template(
-        'question', 
-        page_name=page_name, 
-        title=title, 
+        'question',
+        page_name=page_name,
+        title=title,
         body=html,
         solution=solution,
         answer=answer,
@@ -166,7 +179,7 @@ def map():
             lignes.append(' '.join(ligne))
             ligne = []
 
-    body = '<pre>\n{}\n</pre>'.format('\n'.join(lignes))    
+    body = '<pre>\n{}\n</pre>'.format('\n'.join(lignes))
     return template('page', title=title, body=body)
 
 @get('/plak/<page_name>')
@@ -213,7 +226,7 @@ def do_feedback(answer, solution, next_level):
 def page_parser(page_name):
     metas = {}
     contents = []
-    filename = '{}.md'.format(page_name)
+    filename = './{}.md'.format(page_name)
     if os.path.exists(filename):
         with open(filename, 'r') as md_data:
             is_meta = True
