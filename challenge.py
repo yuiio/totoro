@@ -4,7 +4,23 @@ from bottle import route, static_file, run, debug, template, redirect, request, 
 from markdown import markdown
 from persistance import User
 
+# Pour la prod :
+# Penser à  commenter run et debug tout en bas
+# from bottle import default_app
+# application = default_app()
+# ROOT_PATH = '/home/yuiio/totoro'
+
+ROOT_PATH = '.'
+STATIC_PATH = '{}/static/'.format(ROOT_PATH)
+
 user = User() # for data persistance
+
+# Ajout un élément à la persistance ici pour ne pas ecraser les données d'elliot
+if not hasattr(user, 'enhanced_map'):
+    user.enhanced_map = False
+if not hasattr(user, 'anti_cheat'):
+    user.anti_cheat = 'bobleponge'
+
 
 def is_logged():
     if not user.logged:
@@ -12,15 +28,15 @@ def is_logged():
 
 @route('/static/<filename>')
 def server_static(filename):
-    return static_file(filename, root='./static/')
+    return static_file(filename, root=STATIC_PATH)
 
 @route('/download/<filename>')
 def download(filename):
-    return static_file(filename, root='./static/', download=filename)
+    return static_file(filename, root=STATIC_PATH, download=filename)
 
 @route('/txt/<filename>')
 def just_txt(filename):
-    path = './static/{}'.format(filename)
+    path = '{}{}'.format(STATIC_PATH ,filename)
     if os.path.exists(path):
         with open(path, 'r') as txt_data:
             txt = txt_data.read()
@@ -30,6 +46,8 @@ def just_txt(filename):
 
 @route('/')
 def index():
+    # user.level =8
+    # user.save()
     if user.logged:
         attr = [
             'href="/challenge/question1" class="calendar-complete"',
@@ -43,17 +61,22 @@ def index():
             'href="/page/congratulations" class="calendar-complete"'
             ]
 
-        for i in range(user.level+1, len(attr)):
+        niveau = user.level
+        if user.level > 8:
+            niveau = 8
+
+        for i in range(niveau + 1, len(attr)):
             attr[i] = 'href="#"'
-        attr[user.level] = attr[user.level].split(' ')[0]
+
+        attr[niveau] = attr[niveau].split(' ')[0]
 
         txt = ['' for i in range(9)]
-        if user.level >= 7:
+        if niveau >= 7:
             txt[6] = ' |----> o <a href="/map">[ MapPlaques ]</a> o'
-        if user.level == 8:
-            txt[user.level] = '<--{ !!! Congratulations !!! }'
+        if niveau == 8:
+            txt[niveau] = '<--{ !!! Congratulations !!! }'
         else:
-            txt[user.level] = '<--{ unlocked }'
+            txt[niveau] = '<--{ unlocked }'
 
         return template('index0', attr=attr, txt=txt)
     else:
@@ -95,6 +118,19 @@ def reset():
     user.save()
     redirect('/login')
 
+@get('/reset2')
+def reset2():
+    # Pour le débuggage reset debut challenge 2 -> BipBop
+    user.reps['getbestmap'] = None
+    user.reps['timemaster'] = None
+    user.reps['timemaster2'] = None
+    user.reps['timemaster3'] = None
+    user.reps['robot'] = None
+    user.level = 8
+    user.enhanced_map = False
+    user.save()
+    redirect('/')
+
 @route('/page/<page_name>')
 def page(page_name):
     is_logged()
@@ -106,6 +142,11 @@ def page(page_name):
 @get('/challenge/<page_name>')
 def question(page_name):
     is_logged()
+
+    # user.reps['timemaster'] = None
+    # user.reps['timemaster2'] = None
+    # user.reps['timemaster3'] = None
+    # user.save()
 
     answer = None
     if page_name in user.reps:
@@ -130,7 +171,9 @@ def question(page_name):
 def check_answer(page_name):
     is_logged()
 
-    answer = request.forms.get('reponse')
+    # answer = request.forms.get('reponse')
+    answer = request.forms.reponse
+
 
     metas, content = page_parser(page_name)
     title = metas['title']
@@ -155,6 +198,22 @@ def check_answer(page_name):
         feedback=do_feedback(answer, solution, next_level)
         )
 
+def do_feedback(answer, solution, next_level):
+    if answer == solution:
+        if user.level < 8:
+            # feedback = 'Yeah ! Go to the [\[next level\]](/challenge/{}).  \
+            # Dont\'forget to check your [\5[tipsbox\]](/tips).'.format(next_level)
+            feedback = 'Yeah ! Go to the [\[next level\]](/).  \
+            Dont\'forget to check your [\5[tipsbox\]](/tips).'
+        elif user.level == 8:
+            feedback = '_Congratulation_ ! Maintenant [\[allez chercher\]](/) votre récompense _:)_'
+        else:
+            feedback = 'Bravo Padawan ! La suite est [\[là\]]({}).'.format(next_level)
+
+    else:
+        feedback = 'Try again !'
+    return markdown(feedback)
+
 @get('/tips')
 def tips():
     is_logged()
@@ -163,19 +222,35 @@ def tips():
 @get('/map')
 def map():
     is_logged()
+
+    user.anti_cheat = ''.join([ chr(randint(65, 90)) for i in range(9) ])
+    user.save()
+
     title = '--- { La map des plaques } ---'
     plaques = make_plaques(10000)
-    plaques[525] = 'EQ-323-EF' # [x:26, y:6]
-    plaques[750] = 'DL-572-EQ' # [x:51, y:8]
-    plaques[8156] = 'HE-007-RE' # [x:57, y:82]
+    plaques[525] = 'EQ-323-EF' # [x:26, y:6] plaque manou
+    plaques[750] = 'DL-572-EQ' # [x:51, y:8] plaque 206
+    plaques[8156] = 'HE-007-RE' # [x:57, y:82] 
     plaques[2222] = 'LO-010-OL'
+    plaques[2781] = 'DB-243-TH' # [x:82, y:28] plaque mamy
+    plaques[7618] = 'RO-300-OT' # [x:19, y:77]
 
     lignes = []
     ligne = []
+    x, y = 1, 1
 
     for i in range(10000):
-        ligne.append('<a href="/plak/{pl}">[{pl}]</a>'.format(pl=plaques[i]))
+        if user.enhanced_map:
+            ligne.append('[x:{x:03d} y:{y:03d}]<a href="/plak/{pl}?code={anti}">[{pl}]</a><!--[{num:05d}]-->'.format(
+                x=x, y=y, pl=plaques[i], num=i, anti=crypt(plaques[i], user.anti_cheat)))
+        else:
+            ligne.append('<a href="/plak/{pl}?code={anti}">[{pl}]</a>'.format(
+                x=x, y=y, pl=plaques[i], num=i, anti=crypt(plaques[i], user.anti_cheat)))
+
+        x = x + 1
         if i%100 == 99:
+            y = y + 1
+            x = 1
             lignes.append(' '.join(ligne))
             ligne = []
 
@@ -184,17 +259,36 @@ def map():
 
 @get('/plak/<page_name>')
 def is_tresor(page_name):
-    body = 'Rien à signaler ici.'
-    title = '--- { Bureau du renseignement des plaques } ---'
-    if page_name == 'EQ-323-EF':
-        body = 'La plaque recherchée est dans la 57<sup>ème</sup> colonne.'
-    if page_name == 'DL-572-EQ':
-        body = 'La plaque recherchée est sur la 82<sup>ème</sup> ligne.'
-    if page_name == 'HE-007-RE':
-        body = 'C\'est la <em>fête</em>... <a href="/page/bingo">Bingo !</a>'
-    if user.level == 8 and page_name == 'LO-010-OL':
-        redirect('/page/abracadabra')
-    return template('page', title=title, body=body)
+    if decrypt(request.query.code, user.anti_cheat) == page_name:
+
+        body = 'Rien à signaler ici.'
+        title = '--- { Bureau du renseignement des plaques } ---'
+        if page_name == 'EQ-323-EF':
+            body = 'La plaque recherchée est dans la 57<sup>ème</sup> colonne.'
+        if page_name == 'DL-572-EQ':
+            body = 'La plaque recherchée est sur la 82<sup>ème</sup> ligne.'
+        if page_name == 'HE-007-RE':
+            body = 'C\'est la <em>fête</em>... <a href="/page/bingo">Bingo !</a>'
+        if user.level == 8:
+            if page_name == 'LO-010-OL':
+                redirect('/page/abracadabra')
+        if user.level >= 8:
+            if page_name == 'DB-243-TH':
+                redirect('/page/poursuite')
+            if page_name == 'RO-300-OT':
+                redirect('/challenge/robot')
+
+        return template('page', title=title, body=body)
+    else:
+        return template('page', title='--- Anti-cheat ---', body="Petit malin ... ça c'est fini : faut vraiment cliquer sur la plaque")
+
+@get ('/enhanced_map')
+def active_enhanced_map():
+    user.enhanced_map = True
+    user.save()
+    body = markdown("Votre nouvelle [\[MapPlaques\]](/map) est prêtes ! Well Done !")
+
+    return template('page', title="--- Power !!! ---", body=body)
 
 def make_plaques(n):
     alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
@@ -209,24 +303,10 @@ def make_plaques(n):
         plaques.append(plaque)
     return plaques
 
-def do_feedback(answer, solution, next_level):
-    if answer == solution:
-        if user.level < 8:
-            # feedback = 'Yeah ! Go to the [\[next level\]](/challenge/{}).  \
-            # Dont\'forget to check your [\5[tipsbox\]](/tips).'.format(next_level)
-            feedback = 'Yeah ! Go to the [\[next level\]](/).  \
-            Dont\'forget to check your [\5[tipsbox\]](/tips).'
-        else:
-            feedback = '_Congratulation_ ! Maintenant [\[allez chercher\]](/) votre récompense _:)_'
-    else:
-        feedback = 'Try again !'
-    return markdown(feedback)
-
-
 def page_parser(page_name):
     metas = {}
     contents = []
-    filename = './{}.md'.format(page_name)
+    filename = '{}/{}.md'.format(ROOT_PATH, page_name)
     if os.path.exists(filename):
         with open(filename, 'r') as md_data:
             is_meta = True
@@ -242,6 +322,39 @@ def page_parser(page_name):
         return metas, ''.join(contents)
     else:
         redirect('/')
+
+def crypt(plak, code):
+    result = []
+    for i in range(len(plak)):
+        result.append( 
+            chr( 65 + (ord(plak[i]) + ord(code[i])) % 26 )
+            )
+
+    result[2] = '-'
+    result[6] = '-'
+
+    for i in range(3,6):
+        result[i] = str( (int(plak[i]) + 5) % 10 )
+    return ''.join(result)
+
+
+def decrypt(plak, code):
+    result = []
+
+    if len(plak) != 9 or len(code) != 9:
+        return None
+
+    for i in range(len(plak)):
+        result.append( 
+            chr( 65 + (ord(plak[i]) - ord(code[i])) % 26 )
+            )
+
+    result[2] = '-'
+    result[6] = '-'
+
+    for i in range(3,6):
+        result[i] = str( (int(plak[i]) + 5) % 10 )
+    return ''.join(result)
 
 
 

@@ -16,6 +16,7 @@ class User():
         self.password = 'splitaine'
         self.logged = False
         self.map_unlocked = False
+        self.map_enhanced = False
         self.level = 0
         self.reps = {}
 
